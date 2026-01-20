@@ -3,31 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Grinder Converter</title>
+    <title>Grinder Converter</title>
     <style>
         :root { --primary: #2d231d; --accent: #bc6c25; --bg: #fefae0; --card: #ffffff; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--primary); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--primary); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box;}
         .container { background: var(--card); padding: 2rem; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); width: 100%; max-width: 420px; }
         h2 { text-align: center; margin-top: 0; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
         .form-group { margin-bottom: 1.2rem; }
         label { display: block; margin-bottom: 0.4rem; font-weight: 600; font-size: 0.85rem; opacity: 0.8; }
-        select, input { width: 100%; padding: 12px; border: 2px solid #eee; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; }
+        select, input { width: 100%; padding: 12px; border: 2px solid #eee; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; box-sizing: border-box;}
         select:focus, input:focus { border-color: var(--accent); }
         .result-area { background: #fdfaf0; padding: 1.5rem; border-radius: 12px; text-align: center; border: 2px solid var(--accent); margin-top: 1rem; }
         .result-value { font-size: 2.5rem; font-weight: 900; color: var(--accent); }
         .microns { font-size: 0.9rem; font-weight: 600; color: #8a817c; margin-top: 4px; }
+        footer { margin-top: 1.5rem; font-size: 0.7rem; text-align: center; color: #999; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Grinder Pro</h2>
+    <h2>Grind Converter</h2>
     
     <div class="form-group">
         <label>From Grinder</label>
         <select id="inputGrinder">
+            <option value="rawUm">Gap (μm)</option>
             <option value="c40">Comandante C40 (Clicks)</option>
-            <option value="kplus" selected>1Zpresso K+ (Dial)</option>
+            <option value="timemoreC3">Timemore C3 (Clicks)</option>
+            <option value="kplus">1Zpresso K+ (Dial)</option>
             <option value="zp6">1Zpresso ZP6 (Dial)</option>
             <option value="jx">1Zpresso JX (Clicks)</option>
             <option value="jultra">1Zpresso J-Ultra (Clicks)</option>
@@ -37,14 +40,15 @@
     </div>
 
     <div class="form-group">
-        <label>Setting</label>
-        <input type="number" id="inputSetting" value="6.5" step="0.1">
+        <label id="settingLabel">Setting</label>
+        <input type="number" id="inputSetting" value="600" step="1">
     </div>
 
     <div class="form-group">
         <label>To Grinder</label>
         <select id="outputGrinder">
-            <option value="c40" selected>Comandante C40 (Clicks)</option>
+            <option value="c40">Comandante C40 (Clicks)</option>
+            <option value="timemoreC3">Timemore C3 (Clicks)</option>
             <option value="kplus">1Zpresso K+ (Dial)</option>
             <option value="zp6">1Zpresso ZP6 (Dial)</option>
             <option value="jx">1Zpresso JX (Clicks)</option>
@@ -55,20 +59,26 @@
     </div>
 
     <div class="result-area">
-        <div id="outputValue" class="result-value">22</div>
-        <div id="micronValue" class="microns">~ 650 μm</div>
+        <div id="outputValue" class="result-value">--</div>
+        <div id="micronValue" class="microns">-- μm</div>
     </div>
+
+    <footer>
+        All settings and selections are saved automatically to your browser.
+    </footer>
 </div>
 
 <script>
     const configs = {
+        rawUm: { um: 1, dec: 0 },
         c40: { um: 30, dec: 0 },
-        kplus: { um: 100, dec: 1 }, // Map 6.0 to 600um reference
-        zp6: { um: 133.3, dec: 1 },  // Clarity offset: 4.5 to 600um reference
+        timemoreC3: { um: 23.3, dec: 0 },
+        kplus: { um: 100, dec: 1 }, 
+        zp6: { um: 133.3, dec: 1 }, 
         jx: { um: 25, dec: 0 },
         jultra: { um: 8, dec: 0 },
-        p100: { um: 75, dec: 1 },   // 8.0 to 600um reference
-        df83: { um: 10.9, dec: 0 }  // 55 to 600um reference
+        p100: { um: 75, dec: 1 },  
+        df83: { um: 10.9, dec: 0 } 
     };
 
     const inG = document.getElementById('inputGrinder');
@@ -76,20 +86,40 @@
     const inS = document.getElementById('inputSetting');
     const outV = document.getElementById('outputValue');
     const micV = document.getElementById('micronValue');
+    const labelS = document.getElementById('settingLabel');
+
+    window.onload = () => {
+        const savedFrom = localStorage.getItem('fromGrinder');
+        const savedTo = localStorage.getItem('toGrinder');
+        const savedVal = localStorage.getItem('lastValue');
+
+        if (savedFrom) inG.value = savedFrom;
+        if (savedTo) outG.value = savedTo;
+        if (savedVal) inS.value = savedVal;
+
+        update();
+    };
 
     function update() {
-        const from = configs[inG.value];
+        const fromKey = inG.value;
+        const from = configs[fromKey];
         const to = configs[outG.value];
         const val = parseFloat(inS.value) || 0;
+        
+        labelS.innerText = fromKey === 'rawUm' ? 'Target Gap (μm)' : 'Setting';
+
         const totalUm = val * from.um;
         const result = totalUm / to.um;
         
         outV.innerText = result.toFixed(to.dec);
         micV.innerText = `Approx. Gap: ${Math.round(totalUm)} μm`;
+
+        localStorage.setItem('fromGrinder', inG.value);
+        localStorage.setItem('toGrinder', outG.value);
+        localStorage.setItem('lastValue', inS.value);
     }
 
     [inG, outG, inS].forEach(el => el.addEventListener('input', update));
-    update();
 </script>
 </body>
 </html>
